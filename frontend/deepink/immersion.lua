@@ -471,7 +471,7 @@ function Immersion:install(screen)
             end
             local fmt = buffer[0].format
             local is565 = fmt == C.WINDOW_FORMAT_RGB_565
-            local ok, err = true, nil
+            local ok, err
             if is565 or fmt == C.WINDOW_FORMAT_RGBA_8888 or fmt == C.WINDOW_FORMAT_RGBX_8888 then
                 ok, err = pcall(imm.present, imm, c, frame, buffer[0], is565)
             else
@@ -483,7 +483,7 @@ function Immersion:install(screen)
 
         local function run()
             local c = imm:compute(ext_bb, tonumber(ext_bb.w), tonumber(ext_bb.h), fb:getDPI())
-            local ok, err = true, nil
+            local ok, err
             if turn and c.has_prev then
                 if flash then
                     ok, err = post(c, imm:flashFrame(c))
