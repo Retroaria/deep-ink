@@ -32,6 +32,7 @@ local DPI_CHOICES = {
     { 300, _("300 ppi (Kindle Paperwhite)") },
     { 220, _("220 ppi (Xteink X4)") },
     { 167, _("167 ppi (classic Kindle)") },
+    { 130, _("130 ppi (strong effect)") },
     { 0,   _("Native (no resolution change)") },
 }
 
@@ -48,6 +49,16 @@ function DeepInk:init()
     Immersion:install(Device.screen)
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
+    if not G_reader_settings:isTrue("deep_ink_welcome_shown") then
+        G_reader_settings:makeTrue("deep_ink_welcome_shown")
+        UIManager:scheduleIn(1, function()
+            UIManager:show(InfoMessage:new{
+                text = T(_("Deep Immersion is %1.\n\nSettings (gear icon) → Deep Immersion (DI)"),
+                    Immersion:isEnabled() and _("on") or _("off")),
+                timeout = 6,
+            })
+        end)
+    end
 end
 
 function DeepInk:onDispatcherRegisterActions()

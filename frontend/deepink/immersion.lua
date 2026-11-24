@@ -34,7 +34,7 @@ local Immersion = {
 }
 
 Immersion.DEFAULTS = {
-    enabled = false,
+    enabled = true,     -- on by default: Deep Ink is about this
     dpi = 220,          -- simulated pixel density; 0 = native resolution
     levels = 16,        -- gray levels
     dither = true,      -- ordered dithering between gray levels

@@ -14,8 +14,16 @@ GRADLE="${LAUNCHER}/app/build.gradle"
 sed -i 's/applicationId "org.koreader.launcher"/applicationId "io.github.retroaria.deepink"/' "${GRADLE}"
 sed -i "/applicationIdSuffix = '.fdroid'/d" "${GRADLE}"
 
-# Icons.
+# Icons: main resources, plus the flavor folders that override them
+# (the fdroid flavor ships its own mipmap icons).
 cp -rv "${ROOT}/deepink/android/res/." "${RES}/"
+for flavor_res in "${LAUNCHER}"/app/src/{fdroid,rocks}/res; do
+    [[ -d "${flavor_res}" ]] || continue
+    for dir in "${ROOT}"/deepink/android/res/mipmap-*dpi; do
+        mkdir -p "${flavor_res}/$(basename "${dir}")"
+        cp -v "${dir}/icon.png" "${flavor_res}/$(basename "${dir}")/icon.png"
+    done
+done
 
 echo "Deep Ink: launcher patched"
 grep -n 'applicationId' "${GRADLE}"
