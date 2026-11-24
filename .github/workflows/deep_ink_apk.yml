@@ -40,3 +40,38 @@ jobs:
     with:
       jobs: android-arm android-arm64
       artifacts: true
+
+  release:
+    name: Publish test APKs
+    needs: build
+    permissions:
+      actions: read
+      contents: write
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          show-progress: false
+          sparse-checkout: .github
+      - name: Download APKs
+        uses: ./.github/actions/download-artifacts
+        with:
+          path: assets
+          regex: '^deep-ink-.*\.apk$'
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -x
+          ls -la assets
+          cp assets/deep-ink-android-arm-*.apk deep-ink-arm.apk
+          cp assets/deep-ink-android-arm64-*.apk deep-ink-arm64.apk
+          tag=deep-ink-test
+          gh release delete "${tag}" --yes --cleanup-tag || true
+          gh release create "${tag}" --prerelease --target "${GITHUB_SHA}" \
+            --title "Deep Ink - test build (${BRANCH} @ ${GITHUB_SHA::7})" \
+            --notes "Test build of Deep Ink. deep-ink-arm.apk: older/32-bit phones (e.g. LG F100/F200/F300). deep-ink-arm64.apk: modern phones. Android 4.3+." \
+            deep-ink-arm.apk deep-ink-arm64.apk
