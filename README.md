@@ -13,7 +13,7 @@ Reading apps on phones and tablets try to imitate paper with colors and textures
 
 Turn it on in **Settings → Deep Immersion (DI)**, or assign *Toggle Deep Immersion* to a gesture to compare in one tap. Everything else is KOReader, including progress sync (KOSync) with KOReader and CrossPoint devices.
 
-Works on Android 4.3 and newer. APKs are built by GitHub Actions (*Deep Ink APK* workflow, artifacts).
+Works on Android 4.3 and newer. Download the APKs from [Releases](https://github.com/Retroaria/deep-ink/releases); what changed in each beta is in [deepink/CHANGELOG.md](deepink/CHANGELOG.md).
 
 Deep Ink is based on [KOReader](https://github.com/koreader/koreader) and, like it, licensed under the AGPL-3.0. "E Ink" is a trademark of E Ink Holdings; Deep Ink is not affiliated with it.
 
