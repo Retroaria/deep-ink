@@ -64,6 +64,8 @@ local order = {
     setting = {
         -- common settings
         -- those that don't exist will simply be skipped during menu gen
+        "deep_immersion", -- Deep Ink (Android only)
+        "----------------------------",
         "frontlight", -- if Device:hasFrontlight()
         "night_mode",
         "----------------------------",

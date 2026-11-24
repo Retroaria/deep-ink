@@ -59,6 +59,11 @@ jobs:
         shell: bash
         run: git submodule update --depth 1 --init --jobs 4 --recursive
 
+      - name: Deep Ink - patch Android launcher
+        if: startsWith(matrix.target, 'android')
+        shell: bash
+        run: ./deepink/android/patch_launcher.sh
+
       # }}}
 
       # Setup. {{{
@@ -281,11 +286,16 @@ jobs:
         # symlinks (e.g. `data/dict`) to trip 7zip during artifact generation…
         run: make --assume-old=all skeleton update
 
+      - name: Deep Ink - sign APKs
+        if: matrix.artifacts && startsWith(matrix.target, 'android')
+        run: ./deepink/android/sign_apks.sh
+
       - name: Upload artifacts
         if: matrix.artifacts
         uses: $/.github/actions/upload-artifacts
         with:
           patterns: |
+            deep-ink-*.apk
             koreader-*.7z
             koreader-*.apk
             koreader-*.AppImage

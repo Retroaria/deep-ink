@@ -1,3 +1,24 @@
+<p align="center"><img src="deepink/branding/deep-ink-icon-512.png" width="160" alt="Deep Ink"></p>
+
+# Deep Ink
+
+**Deep immersion into the e-ink reading experience on Android.** A KOReader fork that simulates paper-like text, not just the light.
+
+Reading apps on phones and tablets try to imitate paper with colors and textures, but the letters stay perfect: razor-sharp, at 400+ ppi. Printed ink and e-ink are different: fewer pixels, few gray levels, slightly irregular edges. Deep Ink adds **Deep Immersion (DI)**, a mode that brings those characteristics to any Android screen:
+
+- **Simulated resolution**: 300, 220 (Xteink X4) or 167 ppi, with a visible pixel grid
+- **Gray levels**: 4, 8 or 16, like e-ink, with optional dithering
+- **Ink spread**: slightly irregular letter edges, like ink absorbed by paper
+- **Paper grain and tone**: e-ink gray, light or warm
+
+Turn it on in **Settings → Deep Immersion (DI)**, or assign *Toggle Deep Immersion* to a gesture to compare in one tap. Everything else is KOReader, including progress sync (KOSync) with KOReader and CrossPoint devices.
+
+Works on Android 4.3 and newer. APKs are built by GitHub Actions (*Deep Ink APK* workflow, artifacts).
+
+Deep Ink is based on [KOReader](https://github.com/koreader/koreader) and, like it, licensed under the AGPL-3.0. "E Ink" is a trademark of E Ink Holdings; Deep Ink is not affiliated with it.
+
+---
+
 [![KOReader](https://raw.githubusercontent.com/koreader/koreader.github.io/master/koreader-logo.png)](https://koreader.rocks)
 
 #### KOReader is a document viewer primarily aimed at e-ink readers.

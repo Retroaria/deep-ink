@@ -63,7 +63,7 @@ android: # {{{
     id: android-arm
     job: Android ARM
     image: koreader/koandroid:6.0.0-22.04
-    env: PARALLEL_JOBS=5
+    env: PARALLEL_JOBS=5 ANDROID_FLAVOR=Fdroid
     cache_size: 60M
 
   - <<: *ANDROID

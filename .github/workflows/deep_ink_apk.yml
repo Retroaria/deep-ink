@@ -1,0 +1,42 @@
+name: Deep Ink APK
+
+permissions:
+  actions: read
+  contents: read
+
+on:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - '**.md'
+      - 'deepink/branding/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  lint:
+    name: Lint (Deep Ink files)
+    runs-on: ubuntu-26.04
+    container:
+      image: koreader/kobase:3.0.0-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 1
+          show-progress: false
+      - name: Luacheck
+        run: luacheck frontend/deepink plugins/deepink.koplugin frontend/ui/elements/reader_menu_order.lua frontend/ui/elements/filemanager_menu_order.lua
+
+  build:
+    name: Build
+    needs: lint
+    uses: ./.github/workflows/build.yml
+    with:
+      jobs: android-arm android-arm64
+      artifacts: true

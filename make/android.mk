@@ -49,9 +49,11 @@ ANDROID_ASSETS = $(ANDROID_LAUNCHER_BUILD)/assets
 ANDROID_ASSETS_COMPRESSION ?= -m0=lzma2 -mx=9
 ANDROID_LIBS = $(ANDROID_LAUNCHER_BUILD)/libs/$(ANDROID_ABI)
 ANDROID_FLAVOR ?= Rocks
+# Deep Ink: app name (also names the data folder, lowercased).
+ANDROID_PROJECT_NAME ?= Deep-Ink
 
 ifneq (,$(CI))
-  GRADLE_FLAGS ?= --console=plain --no-daemon -x lintVital$(ANDROID_ARCH)RocksRelease
+  GRADLE_FLAGS ?= --console=plain --no-daemon -x lintVital$(ANDROID_ARCH)$(ANDROID_FLAVOR)Release
 endif
 GRADLE_FLAGS += $(PARALLEL_JOBS:%=--max-workers=%)
 
@@ -111,7 +113,7 @@ update-apk: all
 		-PbuildDir='$(abspath $(ANDROID_LAUNCHER_BUILD))' \
 		-PlibsPath='$(abspath $(dir $(ANDROID_LIBS)))' \
 		-PsevenZipLib='$(if $(MONOLIBTIC),koreader-monolibtic,7z)' \
-		-PprojectName='KOReader' \
+		-PprojectName='$(ANDROID_PROJECT_NAME)' \
 		-PversCode='$(ANDROID_VERSION)' \
 		-PversName='$(ANDROID_NAME)' \
 		$(GRADLE_FLAGS) \

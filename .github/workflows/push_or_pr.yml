@@ -5,12 +5,10 @@ name: Push / PR
 permissions:
   contents: read
 
+# Deep Ink: the full upstream matrix (every platform) only runs on demand.
+# Android APKs are built by deep_ink_apk.yml.
 on:
-  push:
-    # NOTE: ignore tags.
-    branches:
-      - "*"
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
