@@ -22,6 +22,7 @@ local order = {
         "----------------------------",
         "deepink_shade",
         "deepink_tone",
+        "deepink_transition",
         "deepink_flash",
         "----------------------------",
         "deepink_reset",

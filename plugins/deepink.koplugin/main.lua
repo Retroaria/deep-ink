@@ -270,6 +270,16 @@ function DeepInk:getMenu()
         enabled_func = function() return Immersion:isEnabled() end,
         sub_item_table = flash_items,
     }
+    items.deepink_transition = {
+        text = _("Page turn transition"),
+        help_text = _("Old and new letters dissolve into each other for a moment when the page turns, like e-ink."),
+        enabled_func = function() return Immersion:isEnabled() end,
+        checked_func = function() return Immersion:get("transition") end,
+        keep_menu_open = true,
+        callback = function(touchmenu_instance)
+            setAndRedraw("transition", not Immersion:get("transition"), touchmenu_instance)
+        end,
+    }
     items.deepink_reset = {
         text = _("Reset Deep Immersion settings"),
         keep_menu_open = true,

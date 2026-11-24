@@ -6,6 +6,11 @@ Cada versão vira uma pré-release própria no GitHub, com os APKs:
 
 Funciona a partir do Android 4.3. Os ajustes do Deep Immersion (DI) ficam na aba **Deep Ink**, o primeiro ícone do menu de cima (o "p" com a gota).
 
+## Beta 5 — 2026-11-24
+
+- **Transição de página como no Kindle:** ao virar a página, as letras da página antiga se desfazem em fragmentos enquanto as novas surgem, misturadas por um instante (três quadros rápidos). Pode ser desligada em *Page turn transition*.
+- **Piscada cinza, não preta:** a piscada de atualização agora é um cinza médio com o texto invertido bem apagado, como no Kindle, e dura um pouco mais (cerca de 0,08 s) para ser percebida. Ela acontece junto com a transição.
+
 ## Beta 4 — 2026-11-24
 
 - **Aba própria do Deep Ink no menu de cima:** o primeiro ícone (o "p" com a gota de tinta) reúne todas as opções do Deep Immersion, sem precisar entrar em Configurações.

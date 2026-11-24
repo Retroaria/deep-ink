@@ -43,12 +43,19 @@ Immersion.DEFAULTS = {
     paper = "eink",     -- tint: "eink", "light" (neutral) or "warm"
     shade = 3,          -- paper darkness, 1 (lightest) to 5 (darkest)
     flash = "normal",   -- page refresh flash: "off", "rare", "normal", "frequent"
+    transition = true,  -- e-ink page turn: old and new letters dissolve into each other
 }
 
--- Refresh flash: how long the darkened frame stays, and how dark it gets
--- (multiplier applied to the page's gray levels; text keeps its texture).
-Immersion.FLASH_MS = 55
-Immersion.FLASH_DARKEN = 0.55
+-- Refresh flash: a gray (not black) frame with faint inverted text, as on
+-- a Kindle. FLASH_BASE is its gray level, FLASH_TEXT how much text shows.
+Immersion.FLASH_MS = 80
+Immersion.FLASH_BASE = 96
+Immersion.FLASH_TEXT = 0.22
+
+-- Page turn dissolve: intermediate frames, the share of pixels already
+-- switched to the new page in each, and how long each frame stays.
+Immersion.TRANSITION_STEPS = { 0.3, 0.55, 0.8 }
+Immersion.TRANSITION_MS = 30
 
 -- Paper white level per shade (1 = lightest).
 Immersion.SHADES = { 234, 222, 210, 198, 186 }
@@ -171,8 +178,14 @@ function Immersion:buildCache(w, h, screen_dpi)
         tmp = ffi.new("uint8_t[?]", n),
         fiber = makeNoise(n, 1234567),
         grain = makeNoise(n, 7654321),
-        out32 = ffi.new("uint32_t[?]", n),
-        out16 = ffi.new("uint16_t[?]", n),
+        -- final gray of the current page, the page on screen before it,
+        -- and a scratch frame for flashes and transitions
+        cur = ffi.new("uint8_t[?]", n),
+        prev = ffi.new("uint8_t[?]", n),
+        mix = ffi.new("uint8_t[?]", n),
+        has_prev = false,
+        dissolve = nil, -- built on first use
+
         -- source sample positions
         sxa = ffi.new("int32_t[?]", lw),
         sxb = ffi.new("int32_t[?]", lw),
@@ -215,14 +228,57 @@ function Immersion:buildCache(w, h, screen_dpi)
     return c
 end
 
+-- Blotchy, uniformly distributed noise: which pixels switch first during
+-- a page turn. Smoothed so letters break into fragments, not single dots.
+local function makeDissolve(lw, lh)
+    local n = lw * lh
+    local raw = ffi.new("uint8_t[?]", n)
+    local x = 98765
+    for i = 0, n - 1 do
+        x = (x * 1103515245 + 12345) % 2147483648
+        raw[i] = floor(x / 8388608)
+    end
+    local sm = ffi.new("uint8_t[?]", n)
+    for pass = 1, 2 do
+        for y = 0, lh - 1 do
+            for xx = 0, lw - 1 do
+                local sum, cnt = 0, 0
+                for dy = -1, 1 do
+                    local yy = y + dy
+                    if yy >= 0 and yy < lh then
+                        for dx = -1, 1 do
+                            local x2 = xx + dx
+                            if x2 >= 0 and x2 < lw then
+                                sum = sum + raw[yy * lw + x2]
+                                cnt = cnt + 1
+                            end
+                        end
+                    end
+                end
+                sm[y * lw + xx] = sum / cnt
+            end
+        end
+        if pass == 1 then ffi.copy(raw, sm, n) end
+    end
+    -- Histogram equalization, so thresholds 0..255 switch pixels evenly.
+    local hist = ffi.new("uint32_t[256]")
+    for i = 0, n - 1 do hist[sm[i]] = hist[sm[i]] + 1 end
+    local map = ffi.new("uint8_t[256]")
+    local acc = 0
+    for v = 0, 255 do
+        acc = acc + hist[v]
+        map[v] = math.min(255, floor(acc * 256 / n))
+    end
+    for i = 0, n - 1 do sm[i] = map[sm[i]] end
+    return sm
+end
+
 --[[--
-Renders `src` (a BBRGB32 blitbuffer, physical orientation) into the Android
-window buffer `win` (an ANativeWindow_Buffer), applying the e-ink simulation.
+Processes `src` (a BBRGB32 blitbuffer, physical orientation) into the
+low-resolution e-ink gray frame `cache.cur`. Returns the cache.
 --]]
-function Immersion:render(src, win, is565, screen_dpi, flash_frame)
+function Immersion:compute(src, w, h, screen_dpi)
     local s = self.settings
-    local w = math.min(tonumber(src.w), tonumber(win.width))
-    local h = math.min(tonumber(src.h), tonumber(win.height))
     local c = self.cache
     if not c or c.w ~= w or c.h ~= h or c.dpi ~= screen_dpi then
         c = self:buildCache(w, h, screen_dpi)
@@ -296,9 +352,7 @@ function Immersion:render(src, win, is565, screen_dpi, flash_frame)
     local dither = s.dither
     local grain_amp = (s.grain or 0) / 100 * 12 / 128
     local grain = c.grain
-    local flash_k = self.FLASH_DARKEN
-    local out32, out16 = c.out32, c.out16
-    local pal32, pal16 = c.pal32, c.pal16
+    local cur = c.cur
     for y = 0, lh - 1 do
         local row = y * lw
         local brow = (y % 4) * 4
@@ -309,35 +363,67 @@ function Immersion:render(src, win, is565, screen_dpi, flash_frame)
             if q > lm1 then q = lm1 end
             local g = black + q * range / lm1 + grain[i] * grain_amp
             if g < 0 then g = 0 elseif g > 255 then g = 255 end
-            if flash_frame then g = g * flash_k end
-            g = floor(g)
-            if is565 then
-                out16[i] = pal16[g]
-            else
-                out32[i] = pal32[g]
-            end
+            cur[i] = g
         end
     end
+    return c
+end
 
-    -- 5. Upscale (nearest neighbour) straight into the window buffer.
+--- Builds the gray refresh-flash frame into `cache.mix`.
+function Immersion:flashFrame(c)
+    local n = c.lw * c.lh
+    local cur, mix = c.cur, c.mix
+    local base, k = self.FLASH_BASE, self.FLASH_TEXT
+    for i = 0, n - 1 do
+        mix[i] = base + (255 - cur[i]) * k
+    end
+    return mix
+end
+
+--- Builds a dissolve frame between the previous and current page into `cache.mix`.
+function Immersion:transitionFrame(c, progress)
+    if not c.dissolve then c.dissolve = makeDissolve(c.lw, c.lh) end
+    local n = c.lw * c.lh
+    local cur, prev, mix, dis = c.cur, c.prev, c.mix, c.dissolve
+    local threshold = progress * 256
+    for i = 0, n - 1 do
+        if dis[i] < threshold then
+            mix[i] = cur[i]
+        else
+            -- pixels still switching: old ink is already lightening
+            local a, b = prev[i], cur[i]
+            mix[i] = a < b and a + (b - a) * 0.35 or a
+        end
+    end
+    return mix
+end
+
+--- Upscales a low-res gray frame (nearest neighbour) into the window buffer.
+function Immersion:present(c, frame, win, is565)
+    local lw = c.lw
+    -- the window normally matches the page; never write past either
+    local w = math.min(c.w, tonumber(win.width))
+    local h = math.min(c.h, tonumber(win.height))
     local xmap, ymap = c.xmap, c.ymap
     local dstride = tonumber(win.stride)
     if is565 then
+        local pal = c.pal16
         local dst = ffi.cast("uint16_t*", win.bits)
         for y = 0, h - 1 do
             local srow = ymap[y] * lw
             local drow = y * dstride
             for x = 0, w - 1 do
-                dst[drow + x] = out16[srow + xmap[x]]
+                dst[drow + x] = pal[frame[srow + xmap[x]]]
             end
         end
     else
+        local pal = c.pal32
         local dst = ffi.cast("uint32_t*", win.bits)
         for y = 0, h - 1 do
             local srow = ymap[y] * lw
             local drow = y * dstride
             for x = 0, w - 1 do
-                dst[drow + x] = out32[srow + xmap[x]]
+                dst[drow + x] = pal[frame[srow + xmap[x]]]
             end
         end
     end
@@ -376,40 +462,51 @@ function Immersion:install(screen)
         imm.pending_turn = false
         local flash = turn and imm:flashDue()
 
-        local function draw(flash_frame)
+        -- Locks the window, writes one frame, posts it.
+        local function post(c, frame)
             local buffer = ffi.new("ANativeWindow_Buffer[1]")
             if android.lib.ANativeWindow_lock(android.app.window, buffer, nil) < 0 then
                 android.LOGW("Deep Ink: unable to lock window buffer")
-                return true, true
+                return true
             end
             local fmt = buffer[0].format
             local is565 = fmt == C.WINDOW_FORMAT_RGB_565
-            local supported = is565
-                or fmt == C.WINDOW_FORMAT_RGBA_8888
-                or fmt == C.WINDOW_FORMAT_RGBX_8888
-            local ok, err
-            if supported then
-                ok, err = pcall(imm.render, imm, ext_bb, buffer[0], is565, fb:getDPI(), flash_frame)
+            local ok, err = true, nil
+            if is565 or fmt == C.WINDOW_FORMAT_RGBA_8888 or fmt == C.WINDOW_FORMAT_RGBX_8888 then
+                ok, err = pcall(imm.present, imm, c, frame, buffer[0], is565)
             else
-                ok, err = true, "unsupported window format " .. tostring(fmt)
+                ok, err = false, "unsupported window format " .. tostring(fmt)
             end
             android.lib.ANativeWindow_unlockAndPost(android.app.window)
-            return supported, ok, err
+            return ok, err
         end
 
-        local supported, ok, err = true, true, nil
-        if flash then
-            -- The e-ink "blink": a short, darkened frame before the new page.
-            supported, ok, err = draw(true)
-            if supported and ok then
-                usleep(imm.FLASH_MS * 1000)
+        local function run()
+            local c = imm:compute(ext_bb, tonumber(ext_bb.w), tonumber(ext_bb.h), fb:getDPI())
+            local ok, err = true, nil
+            if turn and c.has_prev then
+                if flash then
+                    ok, err = post(c, imm:flashFrame(c))
+                    if not ok then return ok, err end
+                    usleep(imm.FLASH_MS * 1000)
+                end
+                if imm.settings.transition then
+                    for _, progress in ipairs(imm.TRANSITION_STEPS) do
+                        ok, err = post(c, imm:transitionFrame(c, progress))
+                        if not ok then return ok, err end
+                        usleep(imm.TRANSITION_MS * 1000)
+                    end
+                end
             end
-        end
-        if supported and ok then
-            supported, ok, err = draw(false)
+            ok, err = post(c, c.cur)
+            ffi.copy(c.prev, c.cur, c.lw * c.lh)
+            c.has_prev = true
+            return ok, err
         end
 
-        if not supported or not ok then
+        local pok, ok, err = pcall(run)
+        if not pok then ok, err = false, ok end
+        if not ok then
             -- Never leave the user with a broken screen: turn DI off and redraw normally.
             logger.warn("Deep Ink: Deep Immersion disabled:", err)
             imm.settings.enabled = false
