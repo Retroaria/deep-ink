@@ -38,9 +38,16 @@ local DPI_CHOICES = {
 
 local LEVEL_CHOICES = { 4, 8, 16 }
 
+local FLASH_CHOICES = {
+    { "off",      _("Off") },
+    { "rare",     _("Rare (every 12-20 pages)") },
+    { "normal",   _("Normal (every 6-12 pages)") },
+    { "frequent", _("Frequent (every 2-5 pages)") },
+}
+
 local PAPER_CHOICES = {
     { "eink",  _("E-ink gray") },
-    { "light", _("Light") },
+    { "light", _("Neutral") },
     { "warm",  _("Warm") },
 }
 
@@ -72,6 +79,11 @@ end
 
 local function redraw()
     UIManager:setDirty("all", "full")
+end
+
+function DeepInk:onPageUpdate()
+    Immersion:notePageTurn()
+    -- don't consume the event, other modules need it
 end
 
 function DeepInk:onToggleDeepImmersion()
@@ -159,6 +171,47 @@ function DeepInk:getMenu()
         })
     end
 
+    local shade_items = {}
+    for shade = 1, #Immersion.SHADES do
+        table.insert(shade_items, {
+            text = shade == 1 and T(_("%1 (lightest)"), shade)
+                or shade == #Immersion.SHADES and T(_("%1 (darkest)"), shade)
+                or tostring(shade),
+            radio = true,
+            checked_func = function() return Immersion:get("shade") == shade end,
+            callback = function(touchmenu_instance)
+                setAndRedraw("shade", shade, touchmenu_instance)
+            end,
+        })
+    end
+
+    local flash_items = {}
+    for idx = 1, #FLASH_CHOICES do
+        local choice = FLASH_CHOICES[idx]
+        table.insert(flash_items, {
+            text = choice[2],
+            radio = true,
+            checked_func = function() return Immersion:get("flash") == choice[1] end,
+            callback = function(touchmenu_instance)
+                setAndRedraw("flash", choice[1], touchmenu_instance)
+            end,
+        })
+    end
+
+    local function flashLabel()
+        local flash = Immersion:get("flash")
+        for idx = 1, #FLASH_CHOICES do
+            if FLASH_CHOICES[idx][1] == flash then
+                return (FLASH_CHOICES[idx][2]:gsub(" %(.*%)", ""))
+            end
+        end
+        return flash
+    end
+
+    local ghost_item = percentItem("ghost", _("Ghosting"),
+        _("A faint trace of the previous page stays on screen until the next refresh flash, like on e-ink."))
+    ghost_item.separator = true
+
     local function dpiLabel()
         local dpi = Immersion:get("dpi")
         if not dpi or dpi == 0 then return _("native") end
@@ -211,11 +264,22 @@ function DeepInk:getMenu()
             percentItem("grain", _("Paper grain"),
                 _("Adds a subtle, static paper texture.")),
             {
+                text_func = function() return T(_("Paper shade: %1"), Immersion:get("shade")) end,
+                enabled_func = function() return Immersion:isEnabled() end,
+                sub_item_table = shade_items,
+            },
+            {
                 text_func = function() return T(_("Paper tone: %1"), paperLabel()) end,
                 enabled_func = function() return Immersion:isEnabled() end,
                 sub_item_table = paper_items,
                 separator = true,
             },
+            {
+                text_func = function() return T(_("Page refresh flash: %1"), flashLabel()) end,
+                enabled_func = function() return Immersion:isEnabled() end,
+                sub_item_table = flash_items,
+            },
+            ghost_item,
             {
                 text = _("Reset Deep Immersion settings"),
                 keep_menu_open = true,

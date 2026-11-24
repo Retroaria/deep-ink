@@ -35,19 +35,32 @@ local Immersion = {
 
 Immersion.DEFAULTS = {
     enabled = true,     -- on by default: Deep Ink is about this
-    dpi = 220,          -- simulated pixel density; 0 = native resolution
+    dpi = 167,          -- simulated pixel density; 0 = native resolution
     levels = 16,        -- gray levels
     dither = true,      -- ordered dithering between gray levels
     spread = 50,        -- ink spread, 0-100
     grain = 25,         -- paper grain, 0-100
-    paper = "eink",     -- "eink", "light" or "warm"
+    paper = "eink",     -- tint: "eink", "light" (neutral) or "warm"
+    shade = 3,          -- paper darkness, 1 (lightest) to 5 (darkest)
+    flash = "normal",   -- page refresh flash: "off", "rare", "normal", "frequent"
+    ghost = 40,         -- ghosting of the previous page, 0-100
+}
+
+-- Paper white level per shade (1 = lightest).
+Immersion.SHADES = { 234, 222, 210, 198, 186 }
+
+-- Pages between two refresh flashes: random in [min, max].
+Immersion.FLASH_INTERVALS = {
+    rare     = { 12, 20 },
+    normal   = { 6, 12 },
+    frequent = { 2, 5 },
 }
 
 Immersion.PAPERS = {
-    -- ink black level, paper white level, tint multipliers for r, g, b
-    eink  = { black = 30, white = 222, r = 1.00, g = 1.00, b = 0.98 },
-    light = { black = 24, white = 240, r = 1.00, g = 1.00, b = 1.00 },
-    warm  = { black = 34, white = 230, r = 1.00, g = 0.97, b = 0.90 },
+    -- ink black level, tint multipliers for r, g, b (white comes from the shade)
+    eink  = { black = 30, r = 1.00, g = 1.00, b = 0.98 },
+    light = { black = 26, r = 1.00, g = 1.00, b = 1.00 },
+    warm  = { black = 34, r = 1.00, g = 0.97, b = 0.90 },
 }
 
 local SETTINGS_KEY = "deep_ink"
@@ -70,6 +83,8 @@ function Immersion:loadSettings()
         end
     end
     if not self.PAPERS[s.paper] then s.paper = self.DEFAULTS.paper end
+    if not self.SHADES[s.shade] then s.shade = self.DEFAULTS.shade end
+    if s.flash ~= "off" and not self.FLASH_INTERVALS[s.flash] then s.flash = self.DEFAULTS.flash end
     self.settings = s
     self.cache = nil
     return s
@@ -78,6 +93,7 @@ end
 function Immersion:saveSettings()
     G_reader_settings:saveSetting(SETTINGS_KEY, self.settings)
     self.cache = nil
+    self.pages_until_flash = nil
 end
 
 function Immersion:get(key)
@@ -97,6 +113,26 @@ function Immersion:resetSettings()
     for k, v in pairs(self.DEFAULTS) do self.settings[k] = v end
     self.settings.enabled = enabled
     self:saveSettings()
+end
+
+--- Called by the plugin on every page turn.
+function Immersion:notePageTurn()
+    self.pending_turn = true
+end
+
+--- Decides whether this page turn gets a refresh flash (random interval).
+function Immersion:flashDue()
+    local range = self.FLASH_INTERVALS[self.settings.flash]
+    if not range then return false end
+    if not self.pages_until_flash then
+        self.pages_until_flash = math.random(range[1], range[2])
+    end
+    self.pages_until_flash = self.pages_until_flash - 1
+    if self.pages_until_flash <= 0 then
+        self.pages_until_flash = math.random(range[1], range[2])
+        return true
+    end
+    return false
 end
 
 function Immersion:isEnabled()
@@ -133,6 +169,9 @@ function Immersion:buildCache(w, h, screen_dpi)
         grain = makeNoise(n, 7654321),
         out32 = ffi.new("uint32_t[?]", n),
         out16 = ffi.new("uint16_t[?]", n),
+        -- ink of the last rendered page, and the ghost left by previous pages
+        last_ink = ffi.new("uint8_t[?]", n),
+        ghost = ffi.new("uint8_t[?]", n),
         -- source sample positions
         sxa = ffi.new("int32_t[?]", lw),
         sxb = ffi.new("int32_t[?]", lw),
@@ -179,7 +218,7 @@ end
 Renders `src` (a BBRGB32 blitbuffer, physical orientation) into the Android
 window buffer `win` (an ANativeWindow_Buffer), applying the e-ink simulation.
 --]]
-function Immersion:render(src, win, is565, screen_dpi)
+function Immersion:render(src, win, is565, screen_dpi, invert, turn, flash)
     local s = self.settings
     local w = math.min(tonumber(src.w), tonumber(win.width))
     local h = math.min(tonumber(src.h), tonumber(win.height))
@@ -245,9 +284,36 @@ function Immersion:render(src, win, is565, screen_dpi)
         end
     end
 
+    -- Ghosting: e-ink keeps a faint trace of previous pages until a full
+    -- (flashing) refresh clears it.
+    local n = lw * lh
+    local ghost, last_ink = c.ghost, c.last_ink
+    if not invert then
+        if flash then
+            ffi.fill(ghost, n, 0)
+        elseif turn then
+            for i = 0, n - 1 do
+                local gv = floor(ghost[i] * 0.45)
+                local li = last_ink[i]
+                ghost[i] = li > gv and li or gv
+            end
+        end
+        for i = 0, n - 1 do
+            last_ink[i] = 255 - lum[i]
+        end
+    end
+    local ghost_k = (s.ghost or 0) / 100 * 0.35
+    if ghost_k > 0 and not invert then
+        for i = 0, n - 1 do
+            local limit = 255 - ghost[i] * ghost_k
+            if lum[i] > limit then lum[i] = limit end
+        end
+    end
+
     -- 3. + 4. Quantize, dither, map to e-ink tones, add grain.
     local p = self.PAPERS[s.paper] or self.PAPERS.eink
-    local black, white = p.black, p.white
+    local black = p.black
+    local white = self.SHADES[s.shade] or self.SHADES[self.DEFAULTS.shade]
     local range = white - black
     local levels = math.max(2, s.levels or 16)
     local lm1 = levels - 1
@@ -268,6 +334,7 @@ function Immersion:render(src, win, is565, screen_dpi)
             local g = black + q * range / lm1 + grain[i] * grain_amp
             if g < 0 then g = 0 elseif g > 255 then g = 255 end
             g = floor(g)
+            if invert then g = 255 - g end
             if is565 then
                 out16[i] = pal16[g]
             else
@@ -309,6 +376,7 @@ function Immersion:install(screen)
     local ok_android, android = pcall(require, "android")
     if not ok_android then return end
     local BB = require("ffi/blitbuffer")
+    local usleep = require("ffi/util").usleep
     local C = ffi.C
     if not self.settings then self:loadSettings() end
 
@@ -328,25 +396,46 @@ function Immersion:install(screen)
             return orig_updateWindow(fb)
         end
 
-        local buffer = ffi.new("ANativeWindow_Buffer[1]")
-        if android.lib.ANativeWindow_lock(android.app.window, buffer, nil) < 0 then
-            android.LOGW("Deep Ink: unable to lock window buffer")
-            return
+        local turn = imm.pending_turn
+        imm.pending_turn = false
+        local flash = turn and imm:flashDue()
+
+        local function draw(invert)
+            local buffer = ffi.new("ANativeWindow_Buffer[1]")
+            if android.lib.ANativeWindow_lock(android.app.window, buffer, nil) < 0 then
+                android.LOGW("Deep Ink: unable to lock window buffer")
+                return true, true
+            end
+            local fmt = buffer[0].format
+            local is565 = fmt == C.WINDOW_FORMAT_RGB_565
+            local supported = is565
+                or fmt == C.WINDOW_FORMAT_RGBA_8888
+                or fmt == C.WINDOW_FORMAT_RGBX_8888
+            local ok, err = true, nil
+            if supported then
+                ok, err = pcall(imm.render, imm, ext_bb, buffer[0], is565, fb:getDPI(), invert, turn, flash)
+            else
+                err = "unsupported window format " .. tostring(fmt)
+            end
+            android.lib.ANativeWindow_unlockAndPost(android.app.window)
+            return supported, ok, err
         end
-        local fmt = buffer[0].format
-        local is565 = fmt == C.WINDOW_FORMAT_RGB_565
-        local supported = is565
-            or fmt == C.WINDOW_FORMAT_RGBA_8888
-            or fmt == C.WINDOW_FORMAT_RGBX_8888
-        local ok, err = true, nil
-        if supported then
-            ok, err = pcall(imm.render, imm, ext_bb, buffer[0], is565, fb:getDPI())
+
+        local supported, ok, err = true, true, nil
+        if flash then
+            -- The e-ink "blink": a short inverted frame before the new page.
+            supported, ok, err = draw(true)
+            if supported and ok then
+                usleep(110 * 1000)
+            end
         end
-        android.lib.ANativeWindow_unlockAndPost(android.app.window)
+        if supported and ok then
+            supported, ok, err = draw(false)
+        end
 
         if not supported or not ok then
             -- Never leave the user with a broken screen: turn DI off and redraw normally.
-            logger.warn("Deep Ink: Deep Immersion disabled:", err or ("unsupported window format " .. tostring(fmt)))
+            logger.warn("Deep Ink: Deep Immersion disabled:", err)
             imm.settings.enabled = false
             imm.cache = nil
             return orig_updateWindow(fb)
