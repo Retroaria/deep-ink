@@ -411,11 +411,11 @@ function Immersion:install(screen)
             local supported = is565
                 or fmt == C.WINDOW_FORMAT_RGBA_8888
                 or fmt == C.WINDOW_FORMAT_RGBX_8888
-            local ok, err = true, nil
+            local ok, err
             if supported then
                 ok, err = pcall(imm.render, imm, ext_bb, buffer[0], is565, fb:getDPI(), invert, turn, flash)
             else
-                err = "unsupported window format " .. tostring(fmt)
+                ok, err = true, "unsupported window format " .. tostring(fmt)
             end
             android.lib.ANativeWindow_unlockAndPost(android.app.window)
             return supported, ok, err
