@@ -42,6 +42,7 @@ function FileManagerMenu:getDefaultMenuButtons()
             -- top menu
         },
         -- items in top menu
+        deepink = { icon = "appbar.deepink" }, -- Deep Ink
         filemanager_settings = { icon = "appbar.filebrowser" },
         setting = { icon = "appbar.settings" },
         tools = { icon = "appbar.tools" },

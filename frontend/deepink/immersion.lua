@@ -43,8 +43,12 @@ Immersion.DEFAULTS = {
     paper = "eink",     -- tint: "eink", "light" (neutral) or "warm"
     shade = 3,          -- paper darkness, 1 (lightest) to 5 (darkest)
     flash = "normal",   -- page refresh flash: "off", "rare", "normal", "frequent"
-    ghost = 40,         -- ghosting of the previous page, 0-100
 }
+
+-- Refresh flash: how long the darkened frame stays, and how dark it gets
+-- (multiplier applied to the page's gray levels; text keeps its texture).
+Immersion.FLASH_MS = 55
+Immersion.FLASH_DARKEN = 0.55
 
 -- Paper white level per shade (1 = lightest).
 Immersion.SHADES = { 234, 222, 210, 198, 186 }
@@ -169,9 +173,6 @@ function Immersion:buildCache(w, h, screen_dpi)
         grain = makeNoise(n, 7654321),
         out32 = ffi.new("uint32_t[?]", n),
         out16 = ffi.new("uint16_t[?]", n),
-        -- ink of the last rendered page, and the ghost left by previous pages
-        last_ink = ffi.new("uint8_t[?]", n),
-        ghost = ffi.new("uint8_t[?]", n),
         -- source sample positions
         sxa = ffi.new("int32_t[?]", lw),
         sxb = ffi.new("int32_t[?]", lw),
@@ -218,7 +219,7 @@ end
 Renders `src` (a BBRGB32 blitbuffer, physical orientation) into the Android
 window buffer `win` (an ANativeWindow_Buffer), applying the e-ink simulation.
 --]]
-function Immersion:render(src, win, is565, screen_dpi, invert, turn, flash)
+function Immersion:render(src, win, is565, screen_dpi, flash_frame)
     local s = self.settings
     local w = math.min(tonumber(src.w), tonumber(win.width))
     local h = math.min(tonumber(src.h), tonumber(win.height))
@@ -284,32 +285,6 @@ function Immersion:render(src, win, is565, screen_dpi, invert, turn, flash)
         end
     end
 
-    -- Ghosting: e-ink keeps a faint trace of previous pages until a full
-    -- (flashing) refresh clears it.
-    local n = lw * lh
-    local ghost, last_ink = c.ghost, c.last_ink
-    if not invert then
-        if flash then
-            ffi.fill(ghost, n, 0)
-        elseif turn then
-            for i = 0, n - 1 do
-                local gv = floor(ghost[i] * 0.45)
-                local li = last_ink[i]
-                ghost[i] = li > gv and li or gv
-            end
-        end
-        for i = 0, n - 1 do
-            last_ink[i] = 255 - lum[i]
-        end
-    end
-    local ghost_k = (s.ghost or 0) / 100 * 0.35
-    if ghost_k > 0 and not invert then
-        for i = 0, n - 1 do
-            local limit = 255 - ghost[i] * ghost_k
-            if lum[i] > limit then lum[i] = limit end
-        end
-    end
-
     -- 3. + 4. Quantize, dither, map to e-ink tones, add grain.
     local p = self.PAPERS[s.paper] or self.PAPERS.eink
     local black = p.black
@@ -321,6 +296,7 @@ function Immersion:render(src, win, is565, screen_dpi, invert, turn, flash)
     local dither = s.dither
     local grain_amp = (s.grain or 0) / 100 * 12 / 128
     local grain = c.grain
+    local flash_k = self.FLASH_DARKEN
     local out32, out16 = c.out32, c.out16
     local pal32, pal16 = c.pal32, c.pal16
     for y = 0, lh - 1 do
@@ -333,8 +309,8 @@ function Immersion:render(src, win, is565, screen_dpi, invert, turn, flash)
             if q > lm1 then q = lm1 end
             local g = black + q * range / lm1 + grain[i] * grain_amp
             if g < 0 then g = 0 elseif g > 255 then g = 255 end
+            if flash_frame then g = g * flash_k end
             g = floor(g)
-            if invert then g = 255 - g end
             if is565 then
                 out16[i] = pal16[g]
             else
@@ -400,7 +376,7 @@ function Immersion:install(screen)
         imm.pending_turn = false
         local flash = turn and imm:flashDue()
 
-        local function draw(invert)
+        local function draw(flash_frame)
             local buffer = ffi.new("ANativeWindow_Buffer[1]")
             if android.lib.ANativeWindow_lock(android.app.window, buffer, nil) < 0 then
                 android.LOGW("Deep Ink: unable to lock window buffer")
@@ -413,7 +389,7 @@ function Immersion:install(screen)
                 or fmt == C.WINDOW_FORMAT_RGBX_8888
             local ok, err
             if supported then
-                ok, err = pcall(imm.render, imm, ext_bb, buffer[0], is565, fb:getDPI(), invert, turn, flash)
+                ok, err = pcall(imm.render, imm, ext_bb, buffer[0], is565, fb:getDPI(), flash_frame)
             else
                 ok, err = true, "unsupported window format " .. tostring(fmt)
             end
@@ -423,10 +399,10 @@ function Immersion:install(screen)
 
         local supported, ok, err = true, true, nil
         if flash then
-            -- The e-ink "blink": a short inverted frame before the new page.
+            -- The e-ink "blink": a short, darkened frame before the new page.
             supported, ok, err = draw(true)
             if supported and ok then
-                usleep(110 * 1000)
+                usleep(imm.FLASH_MS * 1000)
             end
         end
         if supported and ok then

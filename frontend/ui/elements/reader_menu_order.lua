@@ -2,6 +2,7 @@ local Device = require("device")
 
 local order = {
     ["KOMenu:menu_buttons"] = {
+        "deepink", -- Deep Ink (Android only)
         "navi",
         "typeset",
         "setting",
@@ -9,6 +10,22 @@ local order = {
         "search",
         "filemanager",
         "main",
+    },
+    deepink = {
+        "deepink_enable",
+        "----------------------------",
+        "deepink_resolution",
+        "deepink_levels",
+        "deepink_dither",
+        "deepink_spread",
+        "deepink_grain",
+        "----------------------------",
+        "deepink_shade",
+        "deepink_tone",
+        "deepink_flash",
+        "----------------------------",
+        "deepink_reset",
+        "deepink_about",
     },
     navi = {
         "table_of_contents",
@@ -64,8 +81,6 @@ local order = {
     setting = {
         -- common settings
         -- those that don't exist will simply be skipped during menu gen
-        "deep_immersion", -- Deep Ink (Android only)
-        "----------------------------",
         "frontlight", -- if Device:hasFrontlight()
         "night_mode",
         "----------------------------",

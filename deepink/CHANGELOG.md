@@ -4,7 +4,13 @@ Cada versão vira uma pré-release própria no GitHub, com os APKs:
 - **deep-ink-arm.apk**: celulares antigos / 32 bits (ex.: LG F100, F200, F300)
 - **deep-ink-arm64.apk**: celulares modernos
 
-Funciona a partir do Android 4.3. O Deep Immersion (DI) fica no menu de cima → ícone de engrenagem → **Deep Immersion (DI)**.
+Funciona a partir do Android 4.3. Os ajustes do Deep Immersion (DI) ficam na aba **Deep Ink**, o primeiro ícone do menu de cima (o "p" com a gota).
+
+## Beta 4 — 2026-11-24
+
+- **Aba própria do Deep Ink no menu de cima:** o primeiro ícone (o "p" com a gota de tinta) reúne todas as opções do Deep Immersion, sem precisar entrar em Configurações.
+- **Piscada mais leve e mais rápida:** em vez de inverter a tela (o que deixava as letras brancas e perfeitas), a página escurece pela metade por cerca de 0,05 s. As letras mantêm a textura.
+- **Fantasmas removidos:** o rastro da página anterior ficava legível demais em áreas em branco e atrapalhava a leitura.
 
 ## Beta 3 — 2026-11-24
 

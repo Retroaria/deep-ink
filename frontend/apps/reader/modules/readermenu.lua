@@ -57,6 +57,7 @@ function ReaderMenu:getDefaultMenuButtons()
             -- top menu
         },
         -- items in top menu
+        deepink = { icon = "appbar.deepink" }, -- Deep Ink
         navi = { icon = "appbar.navigation" },
         typeset = { icon = "appbar.typeset" },
         setting = { icon = "appbar.settings" },

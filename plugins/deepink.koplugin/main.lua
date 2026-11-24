@@ -60,7 +60,7 @@ function DeepInk:init()
         G_reader_settings:makeTrue("deep_ink_welcome_shown")
         UIManager:scheduleIn(1, function()
             UIManager:show(InfoMessage:new{
-                text = T(_("Deep Immersion is %1.\n\nSettings (gear icon) → Deep Immersion (DI)"),
+                text = T(_("Deep Immersion is %1.\n\nDeep Ink tab: the first icon in the top menu"),
                     Immersion:isEnabled() and _("on") or _("off")),
                 timeout = 6,
             })
@@ -208,10 +208,6 @@ function DeepInk:getMenu()
         return flash
     end
 
-    local ghost_item = percentItem("ghost", _("Ghosting"),
-        _("A faint trace of the previous page stays on screen until the next refresh flash, like on e-ink."))
-    ghost_item.separator = true
-
     local function dpiLabel()
         local dpi = Immersion:get("dpi")
         if not dpi or dpi == 0 then return _("native") end
@@ -227,85 +223,80 @@ function DeepInk:getMenu()
         return paper
     end
 
-    return {
+    local items = {}
+    items.deepink_enable = {
         text = _("Deep Immersion (DI)"),
         checked_func = function() return Immersion:isEnabled() end,
-        sub_item_table = {
-            {
-                text = _("Enable Deep Immersion"),
-                checked_func = function() return Immersion:isEnabled() end,
-                keep_menu_open = true,
-                callback = function(touchmenu_instance)
-                    setAndRedraw("enabled", not Immersion:isEnabled(), touchmenu_instance)
-                end,
-                separator = true,
-            },
-            {
-                text_func = function() return T(_("Simulated resolution: %1"), dpiLabel()) end,
-                enabled_func = function() return Immersion:isEnabled() end,
-                sub_item_table = dpi_items,
-            },
-            {
-                text_func = function() return T(_("Gray levels: %1"), Immersion:get("levels")) end,
-                enabled_func = function() return Immersion:isEnabled() end,
-                sub_item_table = level_items,
-            },
-            {
-                text = _("Dithering"),
-                enabled_func = function() return Immersion:isEnabled() end,
-                checked_func = function() return Immersion:get("dither") end,
-                keep_menu_open = true,
-                callback = function(touchmenu_instance)
-                    setAndRedraw("dither", not Immersion:get("dither"), touchmenu_instance)
-                end,
-            },
-            percentItem("spread", _("Ink spread"),
-                _("Makes letter edges slightly irregular, like ink absorbed by paper.")),
-            percentItem("grain", _("Paper grain"),
-                _("Adds a subtle, static paper texture.")),
-            {
-                text_func = function() return T(_("Paper shade: %1"), Immersion:get("shade")) end,
-                enabled_func = function() return Immersion:isEnabled() end,
-                sub_item_table = shade_items,
-            },
-            {
-                text_func = function() return T(_("Paper tone: %1"), paperLabel()) end,
-                enabled_func = function() return Immersion:isEnabled() end,
-                sub_item_table = paper_items,
-                separator = true,
-            },
-            {
-                text_func = function() return T(_("Page refresh flash: %1"), flashLabel()) end,
-                enabled_func = function() return Immersion:isEnabled() end,
-                sub_item_table = flash_items,
-            },
-            ghost_item,
-            {
-                text = _("Reset Deep Immersion settings"),
-                keep_menu_open = true,
-                callback = function(touchmenu_instance)
-                    Immersion:resetSettings()
-                    if touchmenu_instance then touchmenu_instance:updateItems() end
-                    redraw()
-                end,
-            },
-            {
-                text = _("About Deep Immersion"),
-                keep_menu_open = true,
-                callback = function()
-                    UIManager:show(InfoMessage:new{
-                        text = _([[Deep Immersion simulates an e-ink screen: lower pixel density, few gray levels, ink spread on letter edges and paper grain.
+        keep_menu_open = true,
+        callback = function(touchmenu_instance)
+            setAndRedraw("enabled", not Immersion:isEnabled(), touchmenu_instance)
+        end,
+    }
+    items.deepink_resolution = {
+        text_func = function() return T(_("Simulated resolution: %1"), dpiLabel()) end,
+        enabled_func = function() return Immersion:isEnabled() end,
+        sub_item_table = dpi_items,
+    }
+    items.deepink_levels = {
+        text_func = function() return T(_("Gray levels: %1"), Immersion:get("levels")) end,
+        enabled_func = function() return Immersion:isEnabled() end,
+        sub_item_table = level_items,
+    }
+    items.deepink_dither = {
+        text = _("Dithering"),
+        enabled_func = function() return Immersion:isEnabled() end,
+        checked_func = function() return Immersion:get("dither") end,
+        keep_menu_open = true,
+        callback = function(touchmenu_instance)
+            setAndRedraw("dither", not Immersion:get("dither"), touchmenu_instance)
+        end,
+    }
+    items.deepink_spread = percentItem("spread", _("Ink spread"),
+        _("Makes letter edges slightly irregular, like ink absorbed by paper."))
+    items.deepink_grain = percentItem("grain", _("Paper grain"),
+        _("Adds a subtle, static paper texture."))
+    items.deepink_shade = {
+        text_func = function() return T(_("Paper shade: %1"), Immersion:get("shade")) end,
+        enabled_func = function() return Immersion:isEnabled() end,
+        sub_item_table = shade_items,
+    }
+    items.deepink_tone = {
+        text_func = function() return T(_("Paper tone: %1"), paperLabel()) end,
+        enabled_func = function() return Immersion:isEnabled() end,
+        sub_item_table = paper_items,
+    }
+    items.deepink_flash = {
+        text_func = function() return T(_("Page refresh flash: %1"), flashLabel()) end,
+        enabled_func = function() return Immersion:isEnabled() end,
+        sub_item_table = flash_items,
+    }
+    items.deepink_reset = {
+        text = _("Reset Deep Immersion settings"),
+        keep_menu_open = true,
+        callback = function(touchmenu_instance)
+            Immersion:resetSettings()
+            if touchmenu_instance then touchmenu_instance:updateItems() end
+            redraw()
+        end,
+    }
+    items.deepink_about = {
+        text = _("About Deep Ink"),
+        keep_menu_open = true,
+        callback = function()
+            UIManager:show(InfoMessage:new{
+                text = _([[Deep Ink is based on KOReader. Deep Immersion (DI) simulates an e-ink screen: lower pixel density, few gray levels, ink spread on letter edges, paper grain and the occasional refresh flash.
 
 Tip: assign "Toggle Deep Immersion" to a gesture (Settings → Taps and gestures → Gesture manager) to compare it with the normal screen in one tap.]]),
-                    })
-                end,
-            },
-        },
+            })
+        end,
     }
+    return items
 end
 
 function DeepInk:addToMainMenu(menu_items)
-    menu_items.deep_immersion = self:getMenu()
+    for key, item in pairs(self:getMenu()) do
+        menu_items[key] = item
+    end
 end
 
 return DeepInk
