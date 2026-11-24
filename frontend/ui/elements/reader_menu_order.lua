@@ -25,6 +25,8 @@ local order = {
         "deepink_transition",
         "deepink_flash",
         "----------------------------",
+        "deepink_sleep_screen",
+        "----------------------------",
         "deepink_reset",
         "deepink_about",
     },

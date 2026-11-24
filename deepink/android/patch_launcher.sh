@@ -14,6 +14,20 @@ GRADLE="${LAUNCHER}/app/build.gradle"
 sed -i 's/applicationId "org.koreader.launcher"/applicationId "io.github.retroaria.deepink"/' "${GRADLE}"
 sed -i "/applicationIdSuffix = '.fdroid'/d" "${GRADLE}"
 
+# Sleep screen support: JNI methods used by plugins/deepink.koplugin.
+ACTIVITY="${LAUNCHER}/app/src/main/java/org/koreader/launcher/MainActivity.kt"
+if ! grep -q 'deepInkShowWhenLocked' "${ACTIVITY}"; then
+    python3 - "${ACTIVITY}" "${ROOT}/deepink/android/kotlin/MainActivity.deepink.kt" <<'PY'
+import sys
+path, snippet = sys.argv[1], open(sys.argv[2]).read()
+src = open(path).read()
+anchor = "    override fun setScreenOffTimeout("
+assert src.count(anchor) == 1, "Deep Ink: anchor not found in MainActivity.kt"
+open(path, "w").write(src.replace(anchor, snippet + anchor))
+PY
+fi
+grep -c 'fun deepInk' "${ACTIVITY}"
+
 # Icons: main resources, plus the flavor folders that override them
 # (the fdroid flavor ships its own mipmap icons).
 cp -rv "${ROOT}/deepink/android/res/." "${RES}/"

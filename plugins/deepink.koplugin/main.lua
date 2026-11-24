@@ -16,6 +16,7 @@ end
 
 local Dispatcher = require("dispatcher")
 local Immersion = require("deepink/immersion")
+local SleepScreen = require("deepink_sleepscreen")
 local InfoMessage = require("ui/widget/infomessage")
 local SpinWidget = require("ui/widget/spinwidget")
 local UIManager = require("ui/uimanager")
@@ -51,9 +52,14 @@ local PAPER_CHOICES = {
     { "warm",  _("Warm") },
 }
 
+local function sleepScreenEnabled()
+    return G_reader_settings:nilOrTrue("deep_ink_sleep_screen")
+end
+
 function DeepInk:init()
     Immersion:loadSettings()
     Immersion:install(Device.screen)
+    SleepScreen:setShowWhenLocked(sleepScreenEnabled())
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
     if not G_reader_settings:isTrue("deep_ink_welcome_shown") then
@@ -84,6 +90,24 @@ end
 function DeepInk:onPageUpdate()
     Immersion:notePageTurn()
     -- don't consume the event, other modules need it
+end
+
+-- Screen turned off (or app left): show the sleep screen if it was the screen.
+function DeepInk:onRequestSuspend()
+    if sleepScreenEnabled() and not SleepScreen:isScreenOn() then
+        SleepScreen:show(self.path .. "/deepink-logo.png")
+    end
+    -- don't consume the event
+end
+
+function DeepInk:onResume()
+    if not sleepScreenEnabled() then return end
+    if SleepScreen:isLocked() then
+        -- Shown over the lock screen: never reveal the book before unlocking.
+        SleepScreen:show(self.path .. "/deepink-logo.png")
+    else
+        SleepScreen:onResume()
+    end
 end
 
 function DeepInk:onToggleDeepImmersion()
@@ -278,6 +302,18 @@ function DeepInk:getMenu()
         keep_menu_open = true,
         callback = function(touchmenu_instance)
             setAndRedraw("transition", not Immersion:get("transition"), touchmenu_instance)
+        end,
+    }
+    items.deepink_sleep_screen = {
+        text = _("Deep Ink lock screen"),
+        help_text = _("When the screen turns off while Deep Ink is open, the Deep Ink screen appears over Android's lock screen. Swipe to unlock and return to the book."),
+        checked_func = sleepScreenEnabled,
+        keep_menu_open = true,
+        callback = function(touchmenu_instance)
+            local on = not sleepScreenEnabled()
+            G_reader_settings:saveSetting("deep_ink_sleep_screen", on)
+            SleepScreen:setShowWhenLocked(on)
+            if touchmenu_instance then touchmenu_instance:updateItems() end
         end,
     }
     items.deepink_reset = {

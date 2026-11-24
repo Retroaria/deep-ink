@@ -6,6 +6,11 @@ Cada versão vira uma pré-release própria no GitHub, com os APKs:
 
 Funciona a partir do Android 4.3. Os ajustes do Deep Immersion (DI) ficam na aba **Deep Ink**, o primeiro ícone do menu de cima (o "p" com a gota).
 
+## Beta 6 — 2026-11-24
+
+- **Tela de bloqueio do Deep Ink:** ao apagar a tela com o Deep Ink aberto, a tela do Deep Ink (logo, frase e créditos, em tons de cinza) aparece por cima do bloqueio do Android quando o aparelho é ligado de novo. Deslize ou toque para desbloquear (PIN ou digital, se houver) e voltar ao livro. O livro só aparece depois do desbloqueio. Pode ser desligada em *Deep Ink lock screen*.
+- O botão Power continua funcionando como sempre: o Android não permite que apps o interceptem.
+
 ## Beta 5 — 2026-11-24
 
 - **Transição de página como no Kindle:** ao virar a página, as letras da página antiga se desfazem em fragmentos enquanto as novas surgem, misturadas por um instante (três quadros rápidos). Pode ser desligada em *Page turn transition*.
